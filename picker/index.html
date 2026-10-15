@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>발표자 뽑기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fdf8ef;
+    --card: #ffffff;
+    --ink: #2b2a33;
+    --muted: #6b6878;
+    --line: #ece4d3;
+    --c: #7cc4ff;
+    --c-soft: #d6ecff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans KR", sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .top h1 { font-family: "Jua", sans-serif; font-weight: 400; font-size: clamp(1.8rem, 4vw, 2.8rem); margin: 0; }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tools a, .tools button, .tools label {
+    font: inherit; font-size: 1.05rem;
+    padding: 10px 18px; border-radius: 14px;
+    border: 2px solid var(--line); background: var(--card); color: var(--ink);
+    text-decoration: none; cursor: pointer;
+  }
+  .tools label { display: flex; align-items: center; gap: 8px; cursor: default; }
+  .tools input { width: 64px; font: inherit; font-size: 1.05rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: 8px; text-align: center; }
+
+  main { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 16px; min-height: 0; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+
+  .stage {
+    background: var(--card); border: 3px solid var(--line); border-radius: 28px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    padding: 24px;
+  }
+  .ball {
+    width: min(52vh, 70vw); aspect-ratio: 1; border-radius: 50%;
+    background: var(--c-soft); border: 10px solid var(--c);
+    display: grid; place-items: center;
+    font-family: "Jua", sans-serif; font-size: min(26vh, 34vw); line-height: 1;
+  }
+  .ball.rolling { animation: wobble .12s infinite alternate; }
+  .ball.pop { animation: pop .4s; }
+  @keyframes wobble { to { transform: rotate(4deg) scale(1.02); } }
+  @keyframes pop { 40% { transform: scale(1.15); } }
+  .unit { font-family: "Jua", sans-serif; font-size: clamp(1.4rem, 3vw, 2.2rem); color: var(--muted); min-height: 1.2em; }
+
+  .draw {
+    font-family: "Jua", sans-serif; font-size: clamp(1.8rem, 4vw, 2.8rem);
+    padding: 16px 56px; border: none; border-radius: 22px;
+    background: var(--c); color: var(--ink); cursor: pointer; touch-action: manipulation;
+  }
+  .draw:active { transform: scale(.96); }
+  .draw:disabled { opacity: .45; cursor: default; }
+
+  .side {
+    background: var(--card); border: 3px solid var(--line); border-radius: 28px;
+    padding: 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0;
+  }
+  .side h2 { font-family: "Jua", sans-serif; font-weight: 400; font-size: 1.6rem; margin: 0; }
+  .count { color: var(--muted); }
+  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; overflow: auto; }
+  .chip {
+    font-family: "Jua", sans-serif; font-size: 1.4rem;
+    aspect-ratio: 1; border-radius: 14px; border: 2px solid var(--line);
+    display: grid; place-items: center; background: var(--card); color: var(--ink);
+    cursor: pointer; padding: 0;
+  }
+  .chip.done { background: var(--c-soft); border-color: var(--c); }
+  .chip.off { background: #f1ede4; color: #b8b3a6; text-decoration: line-through; }
+  .hint { font-size: .9rem; color: var(--muted); margin: 0; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>🎲 발표자 뽑기</h1>
+    <div class="tools">
+      <a href="../">← 메뉴</a>
+      <label>학생 수 <input id="total" type="number" min="2" max="40"></label>
+      <button id="reset" type="button">처음부터</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="stage">
+      <div class="ball" id="ball">?</div>
+      <div class="unit" id="unit">버튼을 눌러 뽑아요</div>
+      <button class="draw" id="draw" type="button">뽑기!</button>
+    </section>
+
+    <aside class="side">
+      <h2>번호판</h2>
+      <div class="count" id="count"></div>
+      <div class="chips" id="chips"></div>
+      <p class="hint">번호를 한 번 누르면 결석(제외), 다시 누르면 포함돼요. 파란 번호는 이미 뽑힌 번호예요.</p>
+    </aside>
+  </main>
+
+<script>
+  const KEY = "class-apps-picker-v1";
+  let state = { total: 19, picked: [], off: [] };
+
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Number.isInteger(s.total)) state = s;
+  } catch (e) {}
+
+  const $ = id => document.getElementById(id);
+  const ball = $("ball"), unit = $("unit"), drawBtn = $("draw"), totalIn = $("total");
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  function pool() {
+    const p = [];
+    for (let n = 1; n <= state.total; n++) {
+      if (!state.picked.includes(n) && !state.off.includes(n)) p.push(n);
+    }
+    return p;
+  }
+
+  function renderChips() {
+    const box = $("chips");
+    box.innerHTML = "";
+    for (let n = 1; n <= state.total; n++) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (state.off.includes(n) ? " off" : state.picked.includes(n) ? " done" : "");
+      b.textContent = n;
+      b.addEventListener("click", () => toggleOff(n));
+      box.appendChild(b);
+    }
+    const left = pool().length;
+    $("count").textContent = `남은 번호 ${left}개 · 뽑힌 번호 ${state.picked.length}개`;
+    drawBtn.disabled = left === 0;
+    if (left === 0 && state.picked.length) unit.textContent = "모두 뽑았어요! 🎉";
+  }
+
+  function toggleOff(n) {
+    if (state.off.includes(n)) state.off = state.off.filter(x => x !== n);
+    else { state.off.push(n); state.picked = state.picked.filter(x => x !== n); }
+    save(); renderChips();
+  }
+
+  drawBtn.addEventListener("click", () => {
+    const p = pool();
+    if (!p.length) return;
+    drawBtn.disabled = true;
+    ball.classList.remove("pop");
+    ball.classList.add("rolling");
+    unit.textContent = "두구두구…";
+    let t = 0;
+    const spin = setInterval(() => {
+      ball.textContent = p[Math.floor(Math.random() * p.length)];
+      if (++t > 18) {
+        clearInterval(spin);
+        const pick = p[Math.floor(Math.random() * p.length)];
+        state.picked.push(pick);
+        save();
+        ball.textContent = pick;
+        ball.classList.remove("rolling");
+        void ball.offsetWidth;
+        ball.classList.add("pop");
+        unit.textContent = pick + "번 발표해요!";
+        renderChips();
+      }
+    }, 70);
+  });
+
+  $("reset").addEventListener("click", () => {
+    if (confirm("뽑힌 번호를 모두 지우고 처음부터 할까요? (결석 표시는 유지돼요)")) {
+      state.picked = [];
+      save();
+      ball.textContent = "?";
+      unit.textContent = "버튼을 눌러 뽑아요";
+      renderChips();
+    }
+  });
+
+  totalIn.value = state.total;
+  totalIn.addEventListener("change", () => {
+    const v = Math.min(40, Math.max(2, parseInt(totalIn.value, 10) || 19));
+    totalIn.value = v;
+    state.total = v;
+    state.picked = state.picked.filter(n => n <= v);
+    state.off = state.off.filter(n => n <= v);
+    save(); renderChips();
+  });
+
+  renderChips();
+</script>
+</body>
+</html>

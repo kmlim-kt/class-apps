@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수업 타이머</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fdf8ef;
+    --card: #ffffff;
+    --ink: #2b2a33;
+    --muted: #6b6878;
+    --line: #ece4d3;
+    --c: #7bd389;
+    --c-soft: #dff5dc;
+    --warn: #ffb347;
+    --end: #ff7a59;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans KR", sans-serif;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: background .3s;
+  }
+  body.ended { animation: flash 1s 4; }
+  @keyframes flash { 50% { background: #ffe1d6; } }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .top h1 { font-family: "Jua", sans-serif; font-weight: 400; font-size: clamp(1.8rem, 4vw, 2.8rem); margin: 0; }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; }
+  .tools a, .tools button {
+    font: inherit; font-size: 1.05rem;
+    padding: 10px 18px; border-radius: 14px;
+    border: 2px solid var(--line); background: var(--card); color: var(--ink);
+    text-decoration: none; cursor: pointer;
+  }
+
+  main {
+    flex: 1; background: var(--card); border: 3px solid var(--line); border-radius: 28px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    padding: 24px;
+  }
+  .time {
+    font-family: "Jua", sans-serif; line-height: 1;
+    font-size: min(34vh, 24vw);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    transition: color .3s;
+  }
+  .time.warn { color: #d9822b; }
+  .time.end { color: var(--end); }
+  .msg { font-family: "Jua", sans-serif; font-size: clamp(1.4rem, 3vw, 2.2rem); color: var(--muted); min-height: 1.2em; }
+
+  .bar { width: min(900px, 90%); height: 22px; background: #f1ede4; border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; width: 100%; background: var(--c); border-radius: 99px; transition: width 1s linear, background .3s; }
+  .fill.warn { background: var(--warn); }
+  .fill.end { background: var(--end); }
+
+  .presets, .controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .presets button, .controls button {
+    font-family: "Jua", sans-serif; font-size: clamp(1.3rem, 2.4vw, 1.9rem);
+    padding: 12px 26px; border-radius: 18px; border: none; cursor: pointer; touch-action: manipulation;
+  }
+  .presets button { background: var(--c-soft); color: var(--ink); }
+  .presets button.adj { background: #f1ede4; color: var(--muted); }
+  .controls .start { background: var(--c); color: var(--ink); min-width: 180px; }
+  .controls .reset { background: #f1ede4; color: var(--muted); }
+  button:active { transform: scale(.96); }
+  .presets.locked button { opacity: .4; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>⏱️ 수업 타이머</h1>
+    <div class="tools">
+      <a href="../">← 메뉴</a>
+      <button id="full" type="button">전체 화면</button>
+      <button id="sound" type="button">🔔 소리 켬</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="time" id="time" aria-live="off">05:00</div>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="msg" id="msg">시간을 고르고 시작을 눌러요</div>
+
+    <div class="presets" id="presets">
+      <button data-m="1">1분</button>
+      <button data-m="3">3분</button>
+      <button data-m="5">5분</button>
+      <button data-m="10">10분</button>
+      <button data-m="15">15분</button>
+      <button class="adj" data-add="-60">−1분</button>
+      <button class="adj" data-add="60">+1분</button>
+    </div>
+
+    <div class="controls">
+      <button class="start" id="start" type="button">시작</button>
+      <button class="reset" id="reset" type="button">다시</button>
+    </div>
+  </main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const timeEl = $("time"), fill = $("fill"), msg = $("msg"), startBtn = $("start"), presets = $("presets");
+
+  let setSec = 300;      // 정한 시간
+  let left = 300;        // 남은 시간
+  let endAt = null;      // 끝나는 시각(ms)
+  let tick = null;
+  let soundOn = true;
+  try { soundOn = localStorage.getItem("class-apps-timer-sound") !== "off"; } catch (e) {}
+
+  function fmt(s) {
+    const m = Math.floor(s / 60), r = s % 60;
+    return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+  }
+
+  function paint() {
+    timeEl.textContent = fmt(left);
+    const ratio = setSec ? left / setSec : 0;
+    fill.style.width = (ratio * 100) + "%";
+    const warn = left > 0 && left <= Math.min(60, setSec * 0.2);
+    const end = left === 0;
+    timeEl.classList.toggle("warn", warn);
+    timeEl.classList.toggle("end", end);
+    fill.classList.toggle("warn", warn);
+    fill.classList.toggle("end", end);
+  }
+
+  function setTime(sec) {
+    stop();
+    setSec = Math.max(10, Math.min(99 * 60, sec));
+    left = setSec;
+    document.body.classList.remove("ended");
+    msg.textContent = "시간을 고르고 시작을 눌러요";
+    paint();
+  }
+
+  function start() {
+    if (left === 0) setTime(setSec);
+    endAt = Date.now() + left * 1000;
+    tick = setInterval(update, 200);
+    startBtn.textContent = "멈춤";
+    presets.classList.add("locked");
+    msg.textContent = "집중하는 시간!";
+  }
+
+  function stop() {
+    clearInterval(tick);
+    tick = null;
+    endAt = null;
+    startBtn.textContent = left === 0 ? "시작" : (left < setSec ? "계속" : "시작");
+    presets.classList.remove("locked");
+  }
+
+  function update() {
+    const s = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    if (s !== left) { left = s; paint(); }
+    if (left === 0) finish();
+  }
+
+  function finish() {
+    stop();
+    startBtn.textContent = "시작";
+    msg.textContent = "시간 끝! 👏";
+    document.body.classList.remove("ended");
+    void document.body.offsetWidth;
+    document.body.classList.add("ended");
+    if (soundOn) beep();
+  }
+
+  let ctx = null;
+  function beep() {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.35, 0.7].forEach(t => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.4, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.3);
+        o.connect(g).connect(ctx.destination);
+        o.start(ctx.currentTime + t);
+        o.stop(ctx.currentTime + t + 0.32);
+      });
+    } catch (e) {}
+  }
+
+  presets.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.m) setTime(Number(b.dataset.m) * 60);
+    else setTime(setSec + Number(b.dataset.add));
+  });
+
+  startBtn.addEventListener("click", () => {
+    // 브라우저 정책상 소리는 사용자가 버튼을 누를 때 미리 준비해 둠
+    try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume(); } catch (e) {}
+    tick ? stop() : start();
+  });
+  $("reset").addEventListener("click", () => setTime(setSec));
+
+  function paintSound() { $("sound").textContent = soundOn ? "🔔 소리 켬" : "🔕 소리 끔"; }
+  $("sound").addEventListener("click", () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem("class-apps-timer-sound", soundOn ? "on" : "off"); } catch (e) {}
+    paintSound();
+  });
+
+  $("full").addEventListener("click", () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    } catch (e) {}
+  });
+
+  paintSound();
+  paint();
+</script>
+</body>
+</html>
