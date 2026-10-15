@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리 반 교실 앱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fdf8ef;
+    --card: #ffffff;
+    --ink: #2b2a33;
+    --muted: #6b6878;
+    --line: #ece4d3;
+    --accent: #ff7a59;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans KR", sans-serif;
+    padding: 40px 16px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 40px; }
+  h1 {
+    font-family: "Jua", sans-serif;
+    font-weight: 400;
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    margin: 0 0 8px;
+  }
+  h1 span { color: var(--accent); }
+  header p { color: var(--muted); font-size: 1.15rem; margin: 0; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .app {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 28px 24px;
+    background: var(--card);
+    border: 2px solid var(--line);
+    border-radius: 24px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .app:hover, .app:focus-visible {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,.08);
+    border-color: var(--c);
+    outline: none;
+  }
+  .icon {
+    width: 64px; height: 64px;
+    border-radius: 18px;
+    display: grid; place-items: center;
+    font-size: 2rem;
+    background: var(--c);
+  }
+  .app h2 { font-family: "Jua", sans-serif; font-weight: 400; font-size: 1.8rem; margin: 6px 0 0; }
+  .app p { margin: 0; color: var(--muted); line-height: 1.5; }
+  .soon { opacity: .55; pointer-events: none; }
+  .soon .tag {
+    align-self: flex-start;
+    font-size: .85rem;
+    padding: 2px 10px;
+    border-radius: 99px;
+    background: var(--line);
+    color: var(--muted);
+  }
+  footer { text-align: center; color: var(--muted); margin-top: 48px; font-size: .95rem; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>우리 반 <span>교실 앱</span></h1>
+      <p>쓰고 싶은 앱을 눌러 주세요</p>
+    </header>
+
+    <main class="grid">
+      <a class="app" href="score/" style="--c:#ffd9cc">
+        <div class="icon">🏆</div>
+        <h2>모둠 점수판</h2>
+        <p>5개 모둠의 점수를 올리고 내려요.</p>
+      </a>
+
+      <div class="app soon" style="--c:#d6ecff">
+        <div class="icon">🎲</div>
+        <h2>발표자 뽑기</h2>
+        <p>번호로 중복 없이 뽑아요.</p>
+        <span class="tag">준비 중</span>
+      </div>
+
+      <div class="app soon" style="--c:#dff5dc">
+        <div class="icon">⏱️</div>
+        <h2>수업 타이머</h2>
+        <p>큰 숫자로 남은 시간을 보여줘요.</p>
+        <span class="tag">준비 중</span>
+      </div>
+    </main>
+
+    <footer>5학년 교실 웹앱 모음</footer>
+  </div>
+</body>
+</html>
