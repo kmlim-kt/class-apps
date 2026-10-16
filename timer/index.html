@@ -76,7 +76,8 @@
   .controls .start { background: var(--c); color: var(--ink); min-width: 180px; }
   .controls .reset { background: #f1ede4; color: var(--muted); }
   button:active { transform: scale(.96); }
-  .presets.locked button { opacity: .4; pointer-events: none; }
+  .presets.locked button:not(.adj) { opacity: .4; pointer-events: none; }
+  .presets.locked button.adj { background: #ffe9a8; color: var(--ink); }
 </style>
 </head>
 <body>
@@ -202,8 +203,33 @@
     const b = e.target.closest("button");
     if (!b) return;
     if (b.dataset.m) setTime(Number(b.dataset.m) * 60);
-    else setTime(setSec + Number(b.dataset.add));
+    else adjust(Number(b.dataset.add));
   });
+
+  // ±1분: 진행 중이거나 멈춘 중이면 남은 시간에 바로 더하고 빼기
+  function adjust(delta) {
+    const running = !!tick;
+    const midway = !running && left > 0 && left < setSec;
+    if (!running && !midway) { setTime(setSec + delta); return; }
+
+    let next = left + delta;
+    next = Math.min(next, 99 * 60);
+    if (delta < 0) next = Math.max(next, Math.min(left, 10)); // 빼더라도 최소 10초는 남김
+    const diff = next - left;
+    if (diff === 0) return;
+
+    left = next;
+    setSec = Math.max(setSec + diff, left);
+    if (running) endAt += diff * 1000;
+    paint();
+
+    const keep = msg.textContent;
+    msg.textContent = diff > 0 ? "⏫ 시간 추가!" : "⏬ 시간 줄임!";
+    clearTimeout(adjust.t);
+    adjust.t = setTimeout(() => {
+      msg.textContent = tick ? "집중하는 시간!" : keep;
+    }, 1200);
+  }
 
   startBtn.addEventListener("click", () => {
     // 브라우저 정책상 소리는 사용자가 버튼을 누를 때 미리 준비해 둠
