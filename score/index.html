@@ -95,6 +95,28 @@
   }
   body.editing .name:focus { border-style: solid; background: #fff; }
   body.editing .btns { opacity: .35; pointer-events: none; }
+  .vol {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 14px 4px 6px;
+    border: 2px solid var(--line); border-radius: 14px; background: var(--card);
+  }
+  .vol button { border: none !important; padding: 6px 8px !important; font-size: 1.4rem !important; background: transparent !important; }
+  .vol span { min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .vol input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: clamp(110px, 16vw, 200px); height: 10px; border-radius: 99px;
+    background: linear-gradient(to right, #ff9f80 var(--p, 70%), #f1ede4 var(--p, 70%));
+    cursor: pointer; touch-action: none;
+  }
+  .vol input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%;
+    background: #fff; border: 3px solid #ff9f80; box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  }
+  .vol input[type=range]::-moz-range-thumb {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; border: 3px solid #ff9f80;
+  }
+  .vol.muted input[type=range] { filter: grayscale(1); opacity: .5; }
   .tools button.on { background: #2b2a33; color: #fff; border-color: #2b2a33; }
   .notice {
     display: none;
@@ -137,7 +159,11 @@
     <h1>🏆 모둠 점수판</h1>
     <div class="tools">
       <a href="../">← 메뉴</a>
-      <button id="sound" type="button">🔔 소리 켬</button>
+      <div class="vol" id="volBox">
+        <button id="sound" type="button" aria-label="소리 켜기/끄기">🔔</button>
+        <input id="vol" type="range" min="0" max="100" step="5" aria-label="음량">
+        <span id="volNum">70</span>
+      </div>
       <button id="edit" type="button">✏️ 이름 바꾸기</button>
       <button id="reset" type="button">점수 초기화</button>
     </div>
@@ -200,8 +226,14 @@
   }
 
   // ---- 효과음 (파일 없이 브라우저에서 직접 만듦) ----
-  let soundOn = true;
-  try { soundOn = localStorage.getItem("class-apps-score-sound") !== "off"; } catch (e) {}
+  let soundOn = true, volume = 70;
+  try {
+    soundOn = localStorage.getItem("class-apps-score-sound") !== "off";
+    const v = parseInt(localStorage.getItem("class-apps-score-volume"), 10);
+    if (v >= 0 && v <= 100) volume = v;
+  } catch (e) {}
+  // 음량(0~100) → 실제 세기. 70이 지난번 소리와 비슷한 크기, 100은 그보다 더 큼
+  const gainFor = v => 2.6 * Math.pow(v / 100, 1.6);
   let ctx = null, master = null;
 
   // 소리 장치 준비: 전체 음량을 키우고(컴프레서로 찌그러짐 없이) 한 곳으로 모음
@@ -215,7 +247,7 @@
       comp.attack.value = 0.002;
       comp.release.value = 0.15;
       master = ctx.createGain();
-      master.gain.value = 1.6;
+      master.gain.value = gainFor(volume);
       master.connect(comp).connect(ctx.destination);
     }
     if (ctx.state === "suspended") ctx.resume();
@@ -249,7 +281,7 @@
   }
 
   function playSound(d) {
-    if (!soundOn) return;
+    if (!soundOn || volume === 0) return;
     try {
       audio();
       if (d === 1) {                 // 띵-동! (올라가는 두 음)
@@ -285,13 +317,49 @@
   }
 
   const soundBtn = document.getElementById("sound");
-  function paintSound() { soundBtn.textContent = soundOn ? "🔔 소리 켬" : "🔕 소리 끔"; }
+  const volIn = document.getElementById("vol");
+  const volNum = document.getElementById("volNum");
+  const volBox = document.getElementById("volBox");
+
+  function paintSound() {
+    const silent = !soundOn || volume === 0;
+    soundBtn.textContent = silent ? "🔕" : volume < 40 ? "🔈" : volume < 75 ? "🔉" : "🔊";
+    volBox.classList.toggle("muted", !soundOn);
+    volIn.value = volume;
+    volIn.style.setProperty("--p", volume + "%");
+    volNum.textContent = soundOn ? volume : "끔";
+  }
+
+  function saveSound() {
+    try {
+      localStorage.setItem("class-apps-score-sound", soundOn ? "on" : "off");
+      localStorage.setItem("class-apps-score-volume", String(volume));
+    } catch (e) {}
+  }
+
   soundBtn.addEventListener("click", () => {
-    soundOn = !soundOn;
-    try { localStorage.setItem("class-apps-score-sound", soundOn ? "on" : "off"); } catch (e) {}
+    if (volume === 0) {            // 0에서 누르면 기본 음량으로 켬
+      soundOn = true;
+      volume = 70;
+      if (master) master.gain.value = gainFor(volume);
+    } else {
+      soundOn = !soundOn;
+    }
+    saveSound();
     paintSound();
     if (soundOn) playSound(1);
   });
+
+  // 막대를 움직이는 동안 바로 반영, 손을 떼면 미리듣기
+  volIn.addEventListener("input", () => {
+    volume = Number(volIn.value);
+    if (!soundOn && volume > 0) soundOn = true;
+    if (master) master.gain.value = gainFor(volume);
+    saveSound();
+    paintSound();
+  });
+  volIn.addEventListener("change", () => playSound(1));
+
   paintSound();
 
   function change(i, d) {
