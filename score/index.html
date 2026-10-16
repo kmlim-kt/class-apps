@@ -86,7 +86,25 @@
     padding: 4px;
     border-radius: 10px;
   }
-  .name:focus { outline: 2px dashed var(--c); }
+  .name:focus { outline: none; }
+  .name[readonly] { cursor: default; pointer-events: none; }
+  body.editing .name {
+    background: #fffaf0;
+    border: 3px dashed var(--c);
+    cursor: text;
+  }
+  body.editing .name:focus { border-style: solid; background: #fff; }
+  body.editing .btns { opacity: .35; pointer-events: none; }
+  .tools button.on { background: #2b2a33; color: #fff; border-color: #2b2a33; }
+  .notice {
+    display: none;
+    margin: -4px 0 14px;
+    padding: 10px 16px;
+    border-radius: 14px;
+    background: #fff3c4;
+    font-size: 1.05rem;
+  }
+  body.editing .notice { display: block; }
 
   .score {
     font-family: "Jua", sans-serif;
@@ -119,9 +137,12 @@
     <h1>🏆 모둠 점수판</h1>
     <div class="tools">
       <a href="../">← 메뉴</a>
+      <button id="edit" type="button">✏️ 이름 바꾸기</button>
       <button id="reset" type="button">점수 초기화</button>
     </div>
   </div>
+
+  <div class="notice">점선 칸을 눌러 모둠 이름을 고친 뒤 <b>✅ 완료</b>를 눌러 주세요. (최대 10글자)</div>
 
   <main class="board" id="board"></main>
 
@@ -158,7 +179,17 @@
         </div>`;
       const input = el.querySelector(".name");
       input.value = t.name;
+      input.readOnly = !editing;
+      input.tabIndex = editing ? 0 : -1;
       input.addEventListener("input", () => { teams[i].name = input.value; save(); });
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const next = board.children[i + 1];
+          if (next) next.querySelector(".name").focus();
+          else setEditing(false);
+        }
+      });
       el.querySelectorAll("button").forEach(b => {
         b.addEventListener("click", () => change(i, Number(b.dataset.d)));
       });
@@ -184,6 +215,35 @@
       el.classList.toggle("lead", max > 0 && teams[i].score === max);
     });
   }
+
+  let editing = false;
+  const editBtn = document.getElementById("edit");
+
+  function setEditing(on) {
+    editing = on;
+    document.body.classList.toggle("editing", on);
+    editBtn.classList.toggle("on", on);
+    editBtn.textContent = on ? "✅ 완료" : "✏️ 이름 바꾸기";
+    [...board.querySelectorAll(".name")].forEach((input, i) => {
+      if (!on) {
+        // 빈칸으로 두면 원래 이름으로 되돌림
+        const v = input.value.trim();
+        teams[i].name = v || (i + 1) + "모둠";
+        input.value = teams[i].name;
+        input.blur();
+      }
+      input.readOnly = !on;
+      input.tabIndex = on ? 0 : -1;
+    });
+    save();
+    if (on) {
+      const first = board.querySelector(".name");
+      first.focus();
+      first.select();
+    }
+  }
+
+  editBtn.addEventListener("click", () => setEditing(!editing));
 
   document.getElementById("reset").addEventListener("click", () => {
     if (confirm("모든 모둠 점수를 0으로 되돌릴까요?")) {
