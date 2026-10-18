@@ -746,7 +746,9 @@
       applyState(st);
       idleStatus();
     } catch (e) {
-      if (!students.length) grid.innerHTML = '<div class="loading">점수를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</div>';
+      if (!students.length) grid.innerHTML = '<div class="loading">점수를 불러오지 못했어요.<br><br>' +
+        '① 인터넷 연결을 확인하고 새로고침해 주세요.<br>' +
+        '② 계속 안 되면 Apps Script 배포 설정에서 <b>액세스 권한이 "모든 사용자"</b>인지 확인해 주세요.</div>';
       setStatus("err", "연결 끊김");
     }
   }
