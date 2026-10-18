@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개인 점수판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fdf8ef;
+    --card: #ffffff;
+    --ink: #2b2a33;
+    --muted: #6b6878;
+    --line: #ece4d3;
+    --soft: #f1ede4;
+    --c: #ffb86b;
+    --c-soft: #ffe7cc;
+    --plus: #2f9e5b;
+    --minus: #d9534f;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Noto Sans KR", sans-serif;
+    padding: 16px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- 위쪽 막대 ---------- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .top h1 { font-family: "Jua", sans-serif; font-weight: 400; font-size: clamp(1.8rem, 4vw, 2.8rem); margin: 0; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tools a, .tools > button {
+    font-size: 1.05rem;
+    padding: 10px 18px; border-radius: 14px;
+    border: 2px solid var(--line); background: var(--card);
+    text-decoration: none; color: var(--ink); cursor: pointer;
+  }
+  .tools > button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .status {
+    font-family: "Noto Sans KR", sans-serif; font-size: .95rem; font-weight: 400;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 99px; background: var(--soft); color: var(--muted);
+  }
+  .status::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #aaa; }
+  .status.ok::before { background: #3cb371; }
+  .status.busy::before { background: #f0ad4e; animation: blink 1s infinite; }
+  .status.err::before { background: var(--minus); }
+  .status.demo::before { background: #9b8cff; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  .notice {
+    display: none; margin: 0 0 12px; padding: 10px 16px; border-radius: 14px;
+    background: #fff3c4; font-size: 1.05rem; line-height: 1.5;
+  }
+  .notice.show { display: block; }
+  body.editing .notice.edit { display: block; }
+
+  /* ---------- 학생 카드 ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  @media (min-width: 1150px) { .grid { grid-template-columns: repeat(10, 1fr); } }
+  .card {
+    position: relative;
+    background: var(--card);
+    border: 3px solid var(--line);
+    border-radius: 22px;
+    padding: 12px 12px 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer;
+    transition: transform .12s, border-color .15s, box-shadow .15s;
+  }
+  .card:hover { border-color: var(--c); }
+  .card:active { transform: scale(.98); }
+  .no {
+    position: absolute; top: 10px; left: 10px;
+    min-width: 36px; height: 36px; padding: 0 8px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: var(--c-soft); font-family: "Jua", sans-serif; font-size: 1.35rem;
+  }
+  .nick {
+    margin-top: 40px;
+    width: 100%;
+    font-family: "Jua", sans-serif; font-size: clamp(1.2rem, 1.9vw, 1.6rem);
+    text-align: center; border: 3px solid transparent; background: transparent;
+    padding: 2px 4px; border-radius: 10px; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nick[readonly] { pointer-events: none; }
+  body.editing .nick { border: 3px dashed var(--c); background: #fffaf0; cursor: text; pointer-events: auto; }
+  body.editing .nick:focus { outline: none; border-style: solid; background: #fff; }
+  body.editing .card { cursor: default; }
+  .score {
+    font-family: "Jua", sans-serif; font-size: clamp(2.6rem, 4.6vw, 3.8rem); line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+  }
+  .score.bump { animation: bump .25s; }
+  @keyframes bump { 50% { transform: scale(1.2); } }
+  .btns { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; width: 100%; margin-top: 4px; }
+  .btns button {
+    font-family: "Jua", sans-serif; font-size: 1.5rem;
+    padding: 8px 0; border: none; border-radius: 14px; cursor: pointer; touch-action: manipulation;
+  }
+  .btns .p { background: var(--c); }
+  .btns .m { background: var(--soft); color: var(--muted); }
+  .btns button:active { transform: scale(.94); }
+  body.locked .btns, body.editing .btns { display: none; }
+  body.locked .card, body.editing .card { padding-bottom: 16px; }
+
+  /* ---------- 기록 창 ---------- */
+  .shade {
+    position: fixed; inset: 0; background: rgba(43,42,51,.45);
+    display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10;
+  }
+  .shade.open { display: flex; }
+  .sheet {
+    width: min(760px, 100%); max-height: calc(100vh - 32px);
+    background: var(--card); border-radius: 26px; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25);
+  }
+  .sheet header {
+    display: flex; align-items: center; gap: 14px; padding: 18px 20px;
+    background: var(--c-soft);
+  }
+  .sheet header .no { position: static; background: #fff; width: 52px; height: 52px; font-size: 1.8rem; border-radius: 16px; }
+  .sheet header h2 { flex: 1; margin: 0; font-family: "Jua", sans-serif; font-weight: 400; font-size: 2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sheet header .big { font-family: "Jua", sans-serif; font-size: 2.6rem; }
+  .close { border: none; background: #fff; width: 48px; height: 48px; border-radius: 14px; font-size: 1.5rem; cursor: pointer; }
+  .sheet .body { padding: 16px 20px 20px; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { background: var(--soft); border-radius: 16px; padding: 10px 8px; text-align: center; }
+  .stat b { display: block; font-family: "Jua", sans-serif; font-weight: 400; font-size: 1.8rem; }
+  .stat span { font-size: .9rem; color: var(--muted); }
+
+  .give { border: 2px dashed var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  body.locked .give { display: none; }
+  .reasons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .reasons button {
+    padding: 6px 14px; border-radius: 99px; border: 2px solid var(--line); background: #fff; cursor: pointer; font-size: 1rem;
+  }
+  .reasons button.sel { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .amounts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .amounts button { font-family: "Jua", sans-serif; font-size: 1.5rem; padding: 10px 0; border: none; border-radius: 14px; cursor: pointer; background: var(--c); }
+  .amounts button.neg { background: var(--soft); color: var(--muted); }
+
+  .hist h3 { font-family: "Jua", sans-serif; font-weight: 400; font-size: 1.3rem; margin: 6px 0 6px; color: var(--muted); }
+  .day { margin-bottom: 10px; }
+  .day h4 { margin: 0 0 4px; font-size: .95rem; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; }
+  .row {
+    display: grid; grid-template-columns: 64px 1fr auto 44px; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 12px; background: #faf7f0; margin-bottom: 4px;
+  }
+  .row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .row .r { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .d { font-family: "Jua", sans-serif; font-size: 1.4rem; }
+  .row .d.up { color: var(--plus); }
+  .row .d.down { color: var(--minus); }
+  .row .del { border: none; background: transparent; color: #b8b3a6; font-size: 1.1rem; border-radius: 10px; height: 36px; cursor: pointer; }
+  .row .del.ask { background: var(--minus); color: #fff; font-size: .85rem; }
+  body.locked .row { grid-template-columns: 64px 1fr auto; }
+  body.locked .row .del { display: none; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+
+  /* ---------- 비밀번호 창 ---------- */
+  .pin { width: min(380px, 100%); background: #fff; border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+  .pin h2 { margin: 0; font-family: "Jua", sans-serif; font-weight: 400; font-size: 1.8rem; }
+  .pin p { margin: 0; color: var(--muted); }
+  .pin input { font-size: 2rem; text-align: center; letter-spacing: .4em; padding: 10px; border: 3px solid var(--line); border-radius: 16px; width: 100%; }
+  .pin input:focus { outline: none; border-color: var(--c); }
+  .pin .err { color: var(--minus); min-height: 1.4em; }
+  .pin .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pin .acts button { padding: 12px; border-radius: 14px; border: none; font-size: 1.1rem; cursor: pointer; background: var(--soft); }
+  .pin .acts button.go { background: var(--c); font-weight: 700; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(120px);
+    background: var(--ink); color: #fff; padding: 12px 22px; border-radius: 14px; font-size: 1.05rem;
+    transition: transform .25s; z-index: 20; max-width: calc(100% - 32px);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .loading { text-align: center; color: var(--muted); padding: 60px 0; font-size: 1.2rem; }
+  @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+<script src="config.js"></script>
+</head>
+<body class="locked">
+  <div class="top">
+    <h1>⭐ 개인 점수판 <span class="status" id="status">불러오는 중</span></h1>
+    <div class="tools">
+      <a href="../">← 메뉴</a>
+      <button id="editBtn" type="button" hidden>✏️ 별명 바꾸기</button>
+      <button id="lockBtn" type="button">🔒 잠금 해제</button>
+    </div>
+  </div>
+
+  <div class="notice" id="demoNotice">
+    🧪 <b>체험 모드</b> — 아직 구글 시트와 연결되지 않아 <b>이 기기에만</b> 저장됩니다. 연결하면 모든 기기에서 같은 점수를 볼 수 있어요.
+  </div>
+  <div class="notice edit">점선 칸을 눌러 별명을 고친 뒤 <b>✅ 완료</b>를 눌러 주세요. (최대 10글자, Enter를 누르면 다음 학생으로)</div>
+
+  <main class="grid" id="grid"><div class="loading">점수를 불러오고 있어요…</div></main>
+
+  <!-- 학생별 기록 창 -->
+  <div class="shade" id="detail">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <header>
+        <div class="no" id="dNo">1</div>
+        <h2 id="dNick">별명</h2>
+        <div class="big" id="dTotal">0</div>
+        <button class="close" id="dClose" type="button" aria-label="닫기">✕</button>
+      </header>
+      <div class="body">
+        <div class="stats">
+          <div class="stat"><b id="sToday">0</b><span>오늘</span></div>
+          <div class="stat"><b id="sWeek">0</b><span>이번 주</span></div>
+          <div class="stat"><b id="sMonth">0</b><span>이번 달</span></div>
+          <div class="stat"><b id="sCount">0</b><span>기록 수</span></div>
+        </div>
+
+        <div class="give">
+          <div class="reasons" id="reasons">
+            <button type="button">발표</button>
+            <button type="button">협동</button>
+            <button type="button">과제</button>
+            <button type="button">바른 태도</button>
+            <button type="button">도움</button>
+            <button type="button">정리정돈</button>
+          </div>
+          <div class="amounts" id="amounts">
+            <button type="button" class="neg" data-d="-1">−1</button>
+            <button type="button" data-d="1">+1</button>
+            <button type="button" data-d="2">+2</button>
+            <button type="button" data-d="3">+3</button>
+          </div>
+        </div>
+
+        <div class="hist">
+          <h3>점수 기록</h3>
+          <div id="hList"><div class="empty">불러오는 중…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비밀번호 창 -->
+  <div class="shade" id="pinBox">
+    <form class="pin" id="pinForm">
+      <h2>🔒 선생님 확인</h2>
+      <p>점수와 별명을 바꾸려면 비밀번호를 입력하세요.</p>
+      <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="12">
+      <div class="err" id="pinErr"></div>
+      <div class="acts">
+        <button type="button" id="pinCancel">취소</button>
+        <button type="submit" class="go" id="pinGo">확인</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const COUNT = 19;
+  const API = (window.PERSONAL_SCORE_API || "").trim();
+  const DEMO = !API;
+  const PIN_KEY = "class-apps-personal-pin";
+  const $ = id => document.getElementById(id);
+
+  /* ======================= 데이터 연결 ======================= */
+
+  // 로컬 시각을 "2026-10-19T08:30:00" 형태로
+  function stamp(d = new Date()) {
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  // 구글 Apps Script와 통신
+  const remote = {
+    async state() {
+      const r = await fetch(API + "?action=state&t=" + Date.now(), { cache: "no-store" });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || "error");
+      return j;
+    },
+    async history(no) {
+      const r = await fetch(API + "?action=history&no=" + no + "&t=" + Date.now(), { cache: "no-store" });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || "error");
+      return j.history;
+    },
+    async write(body) {
+      // text/plain으로 보내야 구글 서버와 바로 통신됨
+      const r = await fetch(API, { method: "POST", body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!j.ok) { const e = new Error(j.error || "error"); e.code = j.error; throw e; }
+      return j;
+    }
+  };
+
+  // 체험 모드: 이 기기 브라우저에만 저장
+  const local = (() => {
+    const KEY = "class-apps-personal-demo";
+    let db;
+    try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+    if (!db || !Array.isArray(db.students)) {
+      db = { students: Array.from({ length: COUNT }, (_, i) => ({ no: i + 1, nick: (i + 1) + "번" })), logs: [] };
+    }
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) {} };
+    const state = () => {
+      const tot = {};
+      db.logs.forEach(l => tot[l.no] = (tot[l.no] || 0) + l.delta);
+      return { ok: true, students: db.students.map(s => ({ ...s, total: tot[s.no] || 0 })), records: db.logs.length };
+    };
+    const wait = v => new Promise(r => setTimeout(() => r(v), 120));
+    return {
+      state: () => wait(state()),
+      history: no => wait(db.logs.filter(l => l.no === no).map(l => ({ ...l })).reverse()),
+      write(b) {
+        if (b.action === "add") db.logs.push({ id: Math.random().toString(36).slice(2, 10), time: stamp(), no: b.no, delta: b.delta, reason: b.reason || "" });
+        if (b.action === "nick") { const s = db.students.find(x => x.no === b.no); if (s) s.nick = (b.nick || "").trim().slice(0, 10) || b.no + "번"; }
+        if (b.action === "delete") db.logs = db.logs.filter(l => l.id !== b.id);
+        save();
+        return wait(state());
+      }
+    };
+  })();
+
+  const api = DEMO ? local : remote;
+
+  /* ======================= 화면 상태 ======================= */
+
+  let students = [];          // [{no, nick, total}]
+  let pin = "";
+  try { pin = localStorage.getItem(PIN_KEY) || ""; } catch (e) {}
+  let unlocked = DEMO || !!pin;
+  let editing = false;
+  let openNo = null;          // 기록 창에 열려 있는 학생
+  let reason = "";
+  let changeSeq = 0;          // 화면에서 바꾼 횟수 (동기화 충돌 방지용)
+
+  const grid = $("grid");
+  const statusEl = $("status");
+  const toastEl = $("toast");
+
+  function setStatus(kind, text) {
+    statusEl.className = "status " + kind;
+    statusEl.textContent = text;
+  }
+  function idleStatus() {
+    if (DEMO) setStatus("demo", "체험 모드");
+    else setStatus("ok", "연결됨");
+  }
+
+  let toastT;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastT);
+    toastT = setTimeout(() => toastEl.classList.remove("show"), 2600);
+  }
+
+  /* ======================= 카드 그리기 ======================= */
+
+  function render() {
+    grid.innerHTML = "";
+    students.forEach(s => {
+      const card = document.createElement("section");
+      card.className = "card";
+      card.dataset.no = s.no;
+      card.innerHTML = `
+        <div class="no"></div>
+        <input class="nick" maxlength="10" aria-label="별명">
+        <div class="score"></div>
+        <div class="btns">
+          <button class="m" type="button" data-d="-1" aria-label="1점 빼기">−1</button>
+          <button class="p" type="button" data-d="1" aria-label="1점 더하기">+1</button>
+        </div>`;
+      card.querySelector(".no").textContent = s.no;
+      card.querySelector(".score").textContent = s.total;
+      const nick = card.querySelector(".nick");
+      nick.value = s.nick;
+      nick.readOnly = !editing;
+      nick.tabIndex = editing ? 0 : -1;
+      nick.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const next = card.nextElementSibling;
+          if (next) { const n = next.querySelector(".nick"); n.focus(); n.select(); }
+          else setEditing(false);
+        }
+      });
+      card.querySelectorAll(".btns button").forEach(b =>
+        b.addEventListener("click", e => { e.stopPropagation(); give(s.no, Number(b.dataset.d), ""); })
+      );
+      card.addEventListener("click", () => { if (!editing) openDetail(s.no); });
+      grid.appendChild(card);
+    });
+  }
+
+  function paintCard(no, bump) {
+    const s = students.find(x => x.no === no);
+    const card = grid.querySelector(`.card[data-no="${no}"]`);
+    if (!s || !card) return;
+    const sc = card.querySelector(".score");
+    sc.textContent = s.total;
+    if (bump) { sc.classList.remove("bump"); void sc.offsetWidth; sc.classList.add("bump"); }
+    const nick = card.querySelector(".nick");
+    if (document.activeElement !== nick) nick.value = s.nick;
+  }
+
+  // 서버에서 받은 상태를 화면에 반영
+  function applyState(st) {
+    const fresh = st.students || [];
+    const same = fresh.length === students.length && fresh.every((s, i) => students[i] && students[i].no === s.no);
+    students = fresh.map(s => ({ no: s.no, nick: s.nick, total: s.total }));
+    if (!same || !grid.querySelector(".card")) render();
+    else students.forEach(s => paintCard(s.no, false));
+    if (openNo != null) paintHeader();
+  }
+
+  /* ======================= 저장 대기열 ======================= */
+  // 버튼을 빠르게 여러 번 눌러도 순서대로, 묶어서 저장
+
+  const queue = [];
+  let pumping = false;
+  const idleHooks = [];
+
+  function enqueue(op) {
+    changeSeq++;
+    const last = queue[queue.length - 1];
+    if (op.action === "add" && last && !last.sent && last.action === "add" && last.no === op.no && last.reason === op.reason) {
+      last.delta += op.delta;
+      if (last.delta === 0) queue.pop();
+    } else if (op.action === "nick" && last && !last.sent && last.action === "nick" && last.no === op.no) {
+      last.nick = op.nick;
+    } else {
+      queue.push(op);
+    }
+    pump();
+  }
+
+  async function pump() {
+    if (pumping) return;
+    pumping = true;
+    while (queue.length) {
+      setStatus("busy", "저장 중…");
+      await sleep(DEMO ? 0 : 450);         // 잠깐 기다렸다가 연속 클릭을 하나로 묶음
+      if (!queue.length) break;
+      const op = queue[0];
+      op.sent = true;
+      try {
+        const { sent, ...body } = op;
+        const res = await api.write({ ...body, pin });
+        queue.shift();
+        if (!queue.length) applyState(res);
+        idleStatus();
+      } catch (e) {
+        if (e.code === "pin") {
+          queue.length = 0;
+          lock();
+          toast("비밀번호가 바뀌었거나 맞지 않아요. 다시 잠금 해제해 주세요.");
+          await refresh(true);
+          break;
+        }
+        if (e.code) {                       // 서버가 거절한 요청은 버림
+          queue.shift();
+          toast("저장하지 못한 기록이 있어요.");
+          continue;
+        }
+        op.sent = false;                    // 인터넷 문제: 잠시 후 다시 시도
+        setStatus("err", "연결 끊김 · 다시 시도 중");
+        await sleep(4000);
+      }
+    }
+    pumping = false;
+    if (!queue.length) idleHooks.splice(0).forEach(f => f());
+  }
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const whenIdle = () => new Promise(r => (!pumping && !queue.length) ? r() : idleHooks.push(r));
+
+  /* ======================= 점수 주기 ======================= */
+
+  function give(no, delta, why) {
+    if (!unlocked) { askPin(); return; }
+    const s = students.find(x => x.no === no);
+    if (!s) return;
+    s.total += delta;
+    paintCard(no, true);
+    if (openNo === no) { paintHeader(); bumpStats(delta); }
+    enqueue({ action: "add", no, delta, reason: why });
+  }
+
+  /* ======================= 별명 바꾸기 ======================= */
+
+  function setEditing(on) {
+    if (on && !unlocked) { askPin(() => setEditing(true)); return; }
+    editing = on;
+    document.body.classList.toggle("editing", on);
+    const btn = $("editBtn");
+    btn.classList.toggle("on", on);
+    btn.textContent = on ? "✅ 완료" : "✏️ 별명 바꾸기";
+    grid.querySelectorAll(".card").forEach(card => {
+      const no = Number(card.dataset.no);
+      const input = card.querySelector(".nick");
+      if (!on) {
+        const s = students.find(x => x.no === no);
+        const v = input.value.trim().slice(0, 10) || no + "번";
+        input.value = v;
+        if (s && s.nick !== v) { s.nick = v; enqueue({ action: "nick", no, nick: v }); }
+        input.blur();
+      }
+      input.readOnly = !on;
+      input.tabIndex = on ? 0 : -1;
+    });
+    if (on) { const f = grid.querySelector(".nick"); if (f) { f.focus(); f.select(); } }
+  }
+  $("editBtn").addEventListener("click", () => setEditing(!editing));
+
+  /* ======================= 기록 창 ======================= */
+
+  let hist = [];
+
+  function paintHeader() {
+    const s = students.find(x => x.no === openNo);
+    if (!s) return;
+    $("dNo").textContent = s.no;
+    $("dNick").textContent = s.nick;
+    $("dTotal").textContent = s.total + "점";
+  }
+
+  function dayKey(d) { return stamp(d).slice(0, 10); }
+  function periodStarts() {
+    const now = new Date();
+    const today = dayKey(now);
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return { today, week: dayKey(mon), month: today.slice(0, 7) + "-01" };
+  }
+
+  function paintStats() {
+    const p = periodStarts();
+    let t = 0, w = 0, m = 0;
+    hist.forEach(h => {
+      const d = h.time.slice(0, 10);
+      if (d === p.today) t += h.delta;
+      if (d >= p.week) w += h.delta;
+      if (d >= p.month) m += h.delta;
+    });
+    const fmt = v => (v > 0 ? "+" : "") + v;
+    $("sToday").textContent = fmt(t);
+    $("sWeek").textContent = fmt(w);
+    $("sMonth").textContent = fmt(m);
+    $("sCount").textContent = hist.length;
+  }
+  function bumpStats(delta) {   // 저장 끝나기 전에도 숫자가 바로 바뀌도록
+    hist.unshift({ id: "", time: stamp(), delta, reason: reason, pending: true });
+    paintStats();
+    paintHist();
+  }
+
+  const WD = ["일", "월", "화", "수", "목", "금", "토"];
+  function paintHist() {
+    const box = $("hList");
+    if (!hist.length) { box.innerHTML = '<div class="empty">아직 기록이 없어요.</div>'; return; }
+    box.innerHTML = "";
+    const groups = [];
+    hist.forEach(h => {
+      const d = h.time.slice(0, 10);
+      let g = groups[groups.length - 1];
+      if (!g || g.d !== d) groups.push(g = { d, items: [], sum: 0 });
+      g.items.push(h);
+      g.sum += h.delta;
+    });
+    groups.forEach(g => {
+      const [y, mo, da] = g.d.split("-").map(Number);
+      const wd = WD[new Date(y, mo - 1, da).getDay()];
+      const day = document.createElement("div");
+      day.className = "day";
+      const h4 = document.createElement("h4");
+      h4.innerHTML = `<span></span><span></span>`;
+      h4.children[0].textContent = `${mo}월 ${da}일 (${wd})`;
+      h4.children[1].textContent = `하루 합계 ${g.sum > 0 ? "+" : ""}${g.sum}`;
+      day.appendChild(h4);
+      g.items.forEach(h => {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML = `<span class="t"></span><span class="r"></span><span class="d"></span><button class="del" type="button" aria-label="기록 지우기">✕</button>`;
+        row.querySelector(".t").textContent = h.time.slice(11, 16);
+        row.querySelector(".r").textContent = h.reason || "—";
+        const d = row.querySelector(".d");
+        d.textContent = (h.delta > 0 ? "+" : "") + h.delta;
+        d.classList.add(h.delta > 0 ? "up" : "down");
+        const del = row.querySelector(".del");
+        if (h.pending || !h.id) del.style.visibility = "hidden";
+        del.addEventListener("click", () => {
+          if (!unlocked) { askPin(); return; }
+          if (!del.classList.contains("ask")) {
+            del.classList.add("ask");
+            del.textContent = "지우기";
+            setTimeout(() => { del.classList.remove("ask"); del.textContent = "✕"; }, 3000);
+            return;
+          }
+          removeRecord(h);
+        });
+        day.appendChild(row);
+      });
+      box.appendChild(day);
+    });
+  }
+
+  async function loadHist(no) {
+    try {
+      const h = await api.history(no);
+      if (openNo !== no) return;
+      hist = h;
+      paintStats();
+      paintHist();
+    } catch (e) {
+      if (openNo === no) $("hList").innerHTML = '<div class="empty">기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</div>';
+    }
+  }
+
+  async function openDetail(no) {
+    openNo = no;
+    reason = "";
+    document.querySelectorAll("#reasons button").forEach(b => b.classList.remove("sel"));
+    hist = [];
+    paintHeader();
+    paintStats();
+    $("hList").innerHTML = '<div class="empty">불러오는 중…</div>';
+    $("detail").classList.add("open");
+    await whenIdle();
+    loadHist(no);
+  }
+  function closeDetail() {
+    openNo = null;
+    $("detail").classList.remove("open");
+  }
+  $("dClose").addEventListener("click", closeDetail);
+  $("detail").addEventListener("click", e => { if (e.target.id === "detail") closeDetail(); });
+
+  $("reasons").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const was = b.classList.contains("sel");
+    document.querySelectorAll("#reasons button").forEach(x => x.classList.remove("sel"));
+    if (!was) b.classList.add("sel");
+    reason = was ? "" : b.textContent;
+  });
+  $("amounts").addEventListener("click", async e => {
+    const b = e.target.closest("button");
+    if (!b || openNo == null) return;
+    const no = openNo;
+    give(no, Number(b.dataset.d), reason);
+    await whenIdle();
+    if (openNo === no) loadHist(no);
+  });
+
+  async function removeRecord(h) {
+    const no = openNo;
+    const s = students.find(x => x.no === no);
+    if (s) { s.total -= h.delta; paintCard(no, true); paintHeader(); }
+    hist = hist.filter(x => x !== h);
+    paintStats();
+    paintHist();
+    enqueue({ action: "delete", id: h.id });
+    await whenIdle();
+    if (openNo === no) loadHist(no);
+  }
+
+  /* ======================= 잠금 / 비밀번호 ======================= */
+
+  let afterPin = null;
+
+  function paintLock() {
+    document.body.classList.toggle("locked", !unlocked);
+    $("lockBtn").hidden = DEMO;
+    $("lockBtn").textContent = unlocked ? "🔓 잠그기" : "🔒 잠금 해제";
+    $("editBtn").hidden = !unlocked;
+  }
+  function lock() {
+    if (editing) setEditing(false);
+    unlocked = false;
+    pin = "";
+    try { localStorage.removeItem(PIN_KEY); } catch (e) {}
+    paintLock();
+  }
+  function askPin(then) {
+    if (DEMO) return;
+    afterPin = then || null;
+    $("pinErr").textContent = "";
+    $("pinIn").value = "";
+    $("pinBox").classList.add("open");
+    setTimeout(() => $("pinIn").focus(), 50);
+  }
+  $("lockBtn").addEventListener("click", () => {
+    if (unlocked) { lock(); toast("잠갔어요. 점수를 보는 것만 할 수 있어요."); }
+    else askPin();
+  });
+  $("pinCancel").addEventListener("click", () => $("pinBox").classList.remove("open"));
+  $("pinForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = $("pinIn").value.trim();
+    if (!v) return;
+    $("pinGo").disabled = true;
+    $("pinErr").textContent = "확인 중…";
+    try {
+      const res = await api.write({ action: "check", pin: v });
+      pin = v;
+      unlocked = true;
+      try { localStorage.setItem(PIN_KEY, v); } catch (e2) {}
+      $("pinBox").classList.remove("open");
+      paintLock();
+      applyState(res);
+      toast("잠금을 풀었어요. 이 기기에서는 다음에도 바로 쓸 수 있어요.");
+      if (afterPin) { const f = afterPin; afterPin = null; f(); }
+    } catch (err) {
+      $("pinErr").textContent = err.code === "pin" ? "비밀번호가 맞지 않아요." : "연결에 실패했어요. 다시 시도해 주세요.";
+      $("pinIn").select();
+    } finally {
+      $("pinGo").disabled = false;
+    }
+  });
+
+  /* ======================= 주기적 동기화 ======================= */
+
+  async function refresh(force) {
+    if (!force && (pumping || queue.length || editing)) return;
+    const seq = changeSeq;
+    try {
+      const st = await api.state();
+      if (!force && (seq !== changeSeq || pumping || queue.length || editing)) return; // 그사이 바뀐 게 있으면 건너뜀
+      applyState(st);
+      idleStatus();
+    } catch (e) {
+      if (!students.length) grid.innerHTML = '<div class="loading">점수를 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.</div>';
+      setStatus("err", "연결 끊김");
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
+  window.addEventListener("beforeunload", e => { if (queue.length) { e.preventDefault(); e.returnValue = ""; } });
+
+  /* ======================= 시작 ======================= */
+
+  $("demoNotice").classList.toggle("show", DEMO);
+  paintLock();
+  refresh(true);
+  if (!DEMO) setInterval(() => { if (!document.hidden) refresh(); }, 15000);
+
+  window.__personal = { get students() { return students; }, get queue() { return queue; }, refresh };
+})();
+</script>
+</body>
+</html>
