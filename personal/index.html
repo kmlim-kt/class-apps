@@ -146,6 +146,16 @@
 
   .give { border: 2px dashed var(--line); border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   body.locked .give { display: none; }
+  .memo { display: flex; align-items: center; gap: 8px; }
+  .memo input {
+    flex: 1; min-width: 0; font: inherit; font-size: 1.15rem;
+    padding: 10px 14px; border: 2px solid var(--line); border-radius: 14px; background: #fff;
+    -webkit-user-select: text; user-select: text;
+  }
+  .memo input:focus { outline: none; border-color: var(--c); }
+  .memo .cnt { color: var(--muted); font-size: .9rem; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+  .memo .clr { border: none; background: var(--soft); width: 40px; height: 40px; border-radius: 12px; cursor: pointer; color: var(--muted); }
+  .give .hint { margin: -4px 0 0; font-size: .85rem; color: var(--muted); }
   .reasons { display: flex; gap: 8px; flex-wrap: wrap; }
   .reasons button {
     padding: 6px 14px; border-radius: 99px; border: 2px solid var(--line); background: #fff; cursor: pointer; font-size: 1rem;
@@ -231,6 +241,11 @@
         </div>
 
         <div class="give">
+          <div class="memo">
+            <input id="memo" type="text" maxlength="20" placeholder="내용 (예: 국어 시간 발표 잘함)" autocomplete="off" enterkeyhint="done">
+            <span class="cnt" id="memoCnt">0/20</span>
+            <button class="clr" id="memoClr" type="button" aria-label="내용 지우기">✕</button>
+          </div>
           <div class="reasons" id="reasons">
             <button type="button">발표</button>
             <button type="button">협동</button>
@@ -245,6 +260,7 @@
             <button type="button" data-d="2">+2</button>
             <button type="button" data-d="3">+3</button>
           </div>
+          <p class="hint">발표·협동 같은 단어를 누르면 칸에 들어가요. 직접 쓰거나 고칠 수 있고, 비워 두어도 괜찮아요.</p>
         </div>
 
         <div class="hist">
@@ -566,7 +582,7 @@
     $("sCount").textContent = hist.length;
   }
   function bumpStats(delta) {   // 저장 끝나기 전에도 숫자가 바로 바뀌도록
-    hist.unshift({ id: "", time: stamp(), delta, reason: reason, pending: true });
+    hist.unshift({ id: "", time: stamp(), delta, reason: reason.trim(), pending: true });
     paintStats();
     paintHist();
   }
@@ -635,8 +651,7 @@
 
   async function openDetail(no) {
     openNo = no;
-    reason = "";
-    document.querySelectorAll("#reasons button").forEach(b => b.classList.remove("sel"));
+    setMemo("");
     hist = [];
     paintHeader();
     paintStats();
@@ -652,19 +667,36 @@
   $("dClose").addEventListener("click", closeDetail);
   $("detail").addEventListener("click", e => { if (e.target.id === "detail") closeDetail(); });
 
+  const memo = $("memo");
+  function paintChips() {
+    document.querySelectorAll("#reasons button").forEach(x => x.classList.toggle("sel", x.textContent === reason));
+    $("memoCnt").textContent = reason.length + "/20";
+  }
+  function setMemo(v) {
+    reason = v.slice(0, 20);
+    memo.value = reason;
+    paintChips();
+  }
+  memo.addEventListener("input", () => { reason = memo.value.slice(0, 20); paintChips(); });
+  // 단어를 누른 뒤 칸을 누르면 글자 끝에서 이어 쓰기
+  memo.addEventListener("focus", () => setTimeout(() => {
+    const n = memo.value.length;
+    try { memo.setSelectionRange(n, n); } catch (e) {}
+  }, 0));
+  memo.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); memo.blur(); } });
+  $("memoClr").addEventListener("click", () => setMemo(""));
+
   $("reasons").addEventListener("click", e => {
     const b = e.target.closest("button");
     if (!b) return;
-    const was = b.classList.contains("sel");
-    document.querySelectorAll("#reasons button").forEach(x => x.classList.remove("sel"));
-    if (!was) b.classList.add("sel");
-    reason = was ? "" : b.textContent;
+    setMemo(reason === b.textContent ? "" : b.textContent);
   });
   $("amounts").addEventListener("click", async e => {
     const b = e.target.closest("button");
     if (!b || openNo == null) return;
     const no = openNo;
-    give(no, Number(b.dataset.d), reason);
+    give(no, Number(b.dataset.d), reason.trim());
+    setMemo("");                 // 다음 점수에 같은 내용이 잘못 붙지 않도록 비움
     await whenIdle();
     if (openNo === no) loadHist(no);
   });
